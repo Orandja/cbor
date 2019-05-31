@@ -1,8 +1,3 @@
-extern crate byteorder;
-extern crate half;
-extern crate serde;
-
-pub mod cbor;
 pub mod deserialize;
 pub mod error;
 pub mod read;
@@ -37,9 +32,7 @@ pub fn to_slice<S>(slice: &mut [u8], value: &S) -> Result<usize>
 where
 	S: ser::Serialize,
 {
-	value.serialize(&mut serialize::Serializer::new(write::SliceWriter::new(
-		slice,
-	)))
+	value.serialize(&mut serialize::Serializer::new(write::SliceWriter::new(slice)))
 }
 
 pub fn from_reader<T, R>(reader: R) -> Result<T>
@@ -47,7 +40,8 @@ where
 	T: de::DeserializeOwned,
 	R: std::io::Read,
 {
-	let mut deserializer = deserialize::Deserializer::new(read::IoReader::new(reader, 128));
+	let mut deserializer =
+		deserialize::Deserializer::new(crate::codec::read::IoReader::new(reader, 128));
 	let value = de::Deserialize::deserialize(&mut deserializer)?;
 	Ok(value)
 }
@@ -56,7 +50,8 @@ pub fn from_slice<'a, T>(slice: &'a [u8]) -> Result<T>
 where
 	T: de::Deserialize<'a>,
 {
-	let mut deserializer = deserialize::Deserializer::new(read::SliceReader::new(slice));
+	let mut deserializer =
+		deserialize::Deserializer::new(crate::codec::read::SliceReader::new(slice));
 	let value = de::Deserialize::deserialize(&mut deserializer)?;
 	Ok(value)
 }
