@@ -42,6 +42,10 @@ fn main() {
 	
 	//Decoding from a io::Read
 	let _: Person = orandja_cbor::from_reader(&*vec).unwrap();
+
+    //Decoding from a io::Read with a limitation size. 
+    //If a string of 129 bytes is inside. It will produce an error and will not read it.
+	let _: Person = orandja_cbor::from_reader_limit(&*vec, 128).unwrap();
 }
 ```
 
