@@ -47,7 +47,17 @@ where
 	T: de::DeserializeOwned,
 	R: std::io::Read,
 {
-	let mut deserializer = deserialize::Deserializer::new(read::IoReader::new(reader, 128));
+	let mut deserializer = deserialize::Deserializer::new(read::IoReader::new(reader));
+	let value = de::Deserialize::deserialize(&mut deserializer)?;
+	Ok(value)
+}
+
+pub fn from_reader_limit<T, R>(reader: R, limit: usize) -> Result<T>
+where
+	T: de::DeserializeOwned,
+	R: std::io::Read,
+{
+	let mut deserializer = deserialize::Deserializer::new(read::IoReader::with_limit(reader, limit));
 	let value = de::Deserialize::deserialize(&mut deserializer)?;
 	Ok(value)
 }

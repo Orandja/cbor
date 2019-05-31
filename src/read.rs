@@ -137,22 +137,36 @@ use std::io;
 pub struct IoReader<R: io::Read> {
 	reader: R,
 	scratch: Vec<u8>,
+	limited: bool,
 }
 
 impl<R: io::Read> IoReader<R> {
-	pub fn new(io: R, capacity: usize) -> Self {
+	pub fn new(io: R) -> Self {
+		IoReader {
+			reader: io,
+			scratch: Vec::with_capacity(9),
+			limited: false,
+		}
+	}
+
+	pub fn with_limit(io: R, capacity: usize) -> Self {
 		IoReader {
 			reader: io,
 			scratch: Vec::with_capacity(capacity),
+			limited: true,
 		}
 	}
 
 	#[inline]
-	fn limit_as(&mut self, limit: usize) -> Result<()> {
-		if limit > self.scratch.capacity() {
-			return Err(Error::TemporalError("Capacity overflow"));
+	fn reserve(&mut self, size: usize) -> Result<()> {
+		if size > self.scratch.capacity() {
+			if self.limited {
+				return Err(Error::TemporalError("Capacity overflow"));
+			} else {
+				self.scratch.reserve(size - self.scratch.capacity());
+			}
 		}
-		unsafe { self.scratch.set_len(limit) };
+		unsafe { self.scratch.set_len(size) };
 		Ok(())
 	}
 }
@@ -160,48 +174,48 @@ impl<R: io::Read> IoReader<R> {
 impl<'r, R: io::Read> Reader<'r> for IoReader<R> {
 	#[inline]
 	fn read_bytes<'a>(&'a mut self, size: usize) -> Result<EitherLifetime<'a, 'r>> {
-		self.limit_as(size)?;
+		self.reserve(size)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(EitherLifetime::Current(&self.scratch))
 	}
 
 	#[inline]
 	fn read_u8(&mut self) -> Result<u8> {
-		self.limit_as(LENGHT_U8)?;
+		self.reserve(LENGHT_U8)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(self.scratch[0])
 	}
 	#[inline]
 	fn read_u16(&mut self) -> Result<u16> {
-		self.limit_as(LENGHT_U16)?;
+		self.reserve(LENGHT_U16)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(BigEndian::read_u16(&self.scratch))
 	}
 
 	#[inline]
 	fn read_u32(&mut self) -> Result<u32> {
-		self.limit_as(LENGHT_U32)?;
+		self.reserve(LENGHT_U32)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(BigEndian::read_u32(&self.scratch))
 	}
 
 	#[inline]
 	fn read_u64(&mut self) -> Result<u64> {
-		self.limit_as(LENGHT_U64)?;
+		self.reserve(LENGHT_U64)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(BigEndian::read_u64(&self.scratch))
 	}
 
 	#[inline]
 	fn read_f32(&mut self) -> Result<f32> {
-		self.limit_as(LENGHT_U32)?;
+		self.reserve(LENGHT_U32)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(BigEndian::read_f32(&self.scratch))
 	}
 
 	#[inline]
 	fn read_f64(&mut self) -> Result<f64> {
-		self.limit_as(LENGHT_U64)?;
+		self.reserve(LENGHT_U64)?;
 		self.reader.read(&mut self.scratch).unwrap();
 		Ok(BigEndian::read_f64(&self.scratch))
 	}
