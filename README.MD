@@ -4,7 +4,46 @@ A simple serializer/deserializer implementation of the "[Concise Binary Object R
 
 # Usage
 
+In your dependencies:
 
+```toml
+serde = { version = "1.0", features = ["derive"] }  
+```
+
+Example: 
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Person {
+	name: String,
+	age: u8,
+}
+
+fn main() {
+	let ref jon = Person {
+		name: "jon".into(),
+		age: 21,
+	};
+
+	//Serialize into a slice
+	let mut buffer = [0u8; 128];
+	let writed_bytes: usize = orandja_cbor::to_slice(&mut buffer[..], jon).unwrap();
+
+	//Serialize into a io::Write
+	let _: usize = orandja_cbor::to_writer(vec![], jon).unwrap();
+	
+	//Serialize into a vector
+	let vec: Vec<u8> = orandja_cbor::to_vec(jon).unwrap();
+	
+	//Decoding from a slice
+	let _: Person = orandja_cbor::from_slice(&buffer[..writed_bytes]).unwrap();
+	
+	//Decoding from a io::Read
+	let _: Person = orandja_cbor::from_reader(&*vec).unwrap();
+}
+```
 
 # Limitations
 
