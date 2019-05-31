@@ -1,5 +1,5 @@
 [package]
-name = "odj-cbor"
+name = "orandja_cbor"
 version = "0.1.0"
 authors = ["Briand Lionel <lionel.briand@orandja.fr>"]
 edition = "2018"
