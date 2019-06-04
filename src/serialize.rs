@@ -219,10 +219,19 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 				let lenght = self.write_header_u64(MAJOR_ARRAY, len as u64)?;
 				Ok(SerializeSeq {
 					se: self,
-					size: lenght,
+					serialize_len: lenght,
+					end_marker: false,
 				})
 			}
-			None => unimplemented!(),
+			None => {
+				self.buffer[0] = HEADER_ARRAY_INFINITE;
+				let lenght = self.writer.write(&self.buffer[..1])?;
+				Ok(SerializeSeq {
+					se: self,
+					serialize_len: lenght,
+					end_marker: true,
+				})
+			},
 		}
 	}
 
@@ -231,7 +240,7 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 		let lenght = self.write_header_u64(MAJOR_ARRAY, len as u64)?;
 		Ok(SerializeTuple {
 			se: self,
-			size: lenght,
+			serialize_len: lenght,
 		})
 	}
 
@@ -244,7 +253,7 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 		let lenght = self.write_header_u64(MAJOR_ARRAY, len as u64)?;
 		Ok(SerializeTupleStruct {
 			se: self,
-			size: lenght,
+			serialize_len: lenght,
 		})
 	}
 
@@ -255,10 +264,19 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 				let len = self.write_header_u64(MAJOR_MAP, len as u64)?;
 				Ok(SerializeMap {
 					se: self,
-					size: len,
+					serialize_len: len,
+					end_marker: false
 				})
 			}
-			None => unimplemented!(),
+			None => {
+				self.buffer[0] = HEADER_MAP_INFINITE;
+				let lenght = self.writer.write(&self.buffer[..1])?;
+				Ok(SerializeMap {
+					se: self,
+					serialize_len: lenght,
+					end_marker: true,
+				})
+			},
 		}
 	}
 
@@ -267,7 +285,7 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 		self.len_buffer = self.write_header_u64(MAJOR_MAP, len as u64)?;
 		Ok(SerializeStruct {
 			se: self,
-			size: len,
+			serialize_len: len,
 		})
 	}
 
@@ -314,7 +332,7 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 
 		Ok(SerializeTupleVariant {
 			se: self,
-			size: lenght,
+			serialize_len: lenght,
 		})
 	}
 
@@ -332,7 +350,7 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 		lenght += self.write_header_u64(MAJOR_MAP, len as u64)?;
 		Ok(SerializeStructVariant {
 			se: self,
-			size: lenght,
+			serialize_len: lenght,
 		})
 	}
 
@@ -344,7 +362,8 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 
 pub struct SerializeSeq<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
+	end_marker: bool,
 }
 
 impl<'a, W: Writer> ser::SerializeSeq for SerializeSeq<'a, W> {
@@ -357,19 +376,24 @@ impl<'a, W: Writer> ser::SerializeSeq for SerializeSeq<'a, W> {
 		T: ser::Serialize,
 	{
 		Ok({
-			self.size += value.serialize(&mut *self.se)?;
+			self.serialize_len += value.serialize(&mut *self.se)?;
 		})
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		if self.end_marker {
+			self.se.buffer[0] = HEADER_BREAK;
+			Ok(self.serialize_len + self.se.writer.write(&self.se.buffer[..1])?)
+		} else {
+			Ok(self.serialize_len)
+		}
 	}
 }
 
 pub struct SerializeTuple<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
 }
 
 impl<'a, W: Writer> ser::SerializeTuple for SerializeTuple<'a, W> {
@@ -381,19 +405,19 @@ impl<'a, W: Writer> ser::SerializeTuple for SerializeTuple<'a, W> {
 	where
 		T: ser::Serialize,
 	{
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		Ok(self.serialize_len)
 	}
 }
 
 pub struct SerializeTupleStruct<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
 }
 
 impl<'a, W: Writer> ser::SerializeTupleStruct for SerializeTupleStruct<'a, W> {
@@ -405,19 +429,19 @@ impl<'a, W: Writer> ser::SerializeTupleStruct for SerializeTupleStruct<'a, W> {
 	where
 		T: ser::Serialize,
 	{
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		Ok(self.serialize_len)
 	}
 }
 
 pub struct SerializeTupleVariant<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
 }
 
 impl<'a, W: Writer> ser::SerializeTupleVariant for SerializeTupleVariant<'a, W> {
@@ -429,19 +453,20 @@ impl<'a, W: Writer> ser::SerializeTupleVariant for SerializeTupleVariant<'a, W> 
 	where
 		T: ser::Serialize,
 	{
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		Ok(self.serialize_len)
 	}
 }
 
 pub struct SerializeMap<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
+	end_marker: bool,
 }
 
 impl<'a, W: Writer> ser::SerializeMap for SerializeMap<'a, W> {
@@ -453,7 +478,7 @@ impl<'a, W: Writer> ser::SerializeMap for SerializeMap<'a, W> {
 	where
 		T: ser::Serialize,
 	{
-		self.size += key.serialize(&mut *self.se)?;
+		self.serialize_len += key.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
@@ -462,19 +487,24 @@ impl<'a, W: Writer> ser::SerializeMap for SerializeMap<'a, W> {
 	where
 		T: ser::Serialize,
 	{
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		if self.end_marker {
+			self.se.buffer[0] = HEADER_BREAK;
+			Ok(self.serialize_len + self.se.writer.write(&self.se.buffer[..1])?)
+		} else {
+			Ok(self.serialize_len)
+		}
 	}
 }
 
 pub struct SerializeStruct<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
 }
 
 impl<'a, W: Writer> ser::SerializeStruct for SerializeStruct<'a, W> {
@@ -486,20 +516,20 @@ impl<'a, W: Writer> ser::SerializeStruct for SerializeStruct<'a, W> {
 	where
 		T: ser::Serialize,
 	{
-		self.size += ser::Serializer::serialize_str(&mut *self.se, key)?;
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += ser::Serializer::serialize_str(&mut *self.se, key)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		Ok(self.serialize_len)
 	}
 }
 
 pub struct SerializeStructVariant<'a, W: Writer> {
 	se: &'a mut Serializer<W>,
-	size: usize,
+	serialize_len: usize,
 }
 
 impl<'a, W: Writer> ser::SerializeStructVariant for SerializeStructVariant<'a, W> {
@@ -511,13 +541,13 @@ impl<'a, W: Writer> ser::SerializeStructVariant for SerializeStructVariant<'a, W
 	where
 		T: ser::Serialize,
 	{
-		self.size += ser::Serializer::serialize_str(&mut *self.se, key)?;
-		self.size += value.serialize(&mut *self.se)?;
+		self.serialize_len += ser::Serializer::serialize_str(&mut *self.se, key)?;
+		self.serialize_len += value.serialize(&mut *self.se)?;
 		Ok(())
 	}
 
 	#[inline]
 	fn end(self) -> Result<Self::Ok> {
-		Ok(self.size)
+		Ok(self.serialize_len)
 	}
 }
