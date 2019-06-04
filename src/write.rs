@@ -65,8 +65,6 @@ impl<W: io::Write> IoWriter<W> {
 impl<W: io::Write> Writer for IoWriter<W> {
 	#[inline]
 	fn write(&mut self, bytes: &[u8]) -> Result<usize> {
-		self.writer
-			.write(bytes)
-			.map_err(|e| Error::Other(Box::new(e)))
+		Ok(self.writer.write(bytes)?)
 	}
 }
