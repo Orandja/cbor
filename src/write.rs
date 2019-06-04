@@ -26,12 +26,10 @@ impl<'w> SliceWriter<'w> {
 				if end <= self.slice.len() {
 					Ok(end)
 				} else {
-					Err(Error::TemporalError("End of slice"))
+					Err(Error::Message("Try to write after the end of the slice."))
 				}
 			}
-			None => Err(Error::TemporalError(
-				"really ? how is that possible ?",
-			)),
+			None => Err(Error::Message("Write into an index that exeed usize::max")),
 		}
 	}
 }

@@ -46,10 +46,11 @@ impl<'de, R: Reader<'de>> Deserializer<R> {
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek_and_consume()? == HEADER_FLOAT_U16 {
+		let peek = self.peek_and_consume()?;
+		if peek == HEADER_FLOAT_U16 {
 			visitor.visit_f32(half::f16::from_bits(self.reader.read_u16()?).into())
 		} else {
-			Err(Error::TemporalError("Not a floating point"))
+			Err(Error::Unexpected(peek, "floating point"))
 		}
 	}
 }
@@ -246,17 +247,19 @@ where
 					len: size,
 				})
 			}
-			HEADER_BYTE_INFINITE => Err(Error::TemporalError("unsupported.")),
-			HEADER_TEXT_INFINITE => Err(Error::TemporalError("unsupported.")),
-			HEADER_ARRAY_INFINITE => Err(Error::TemporalError("unsupported.")),
-			HEADER_MAP_INFINITE => Err(Error::TemporalError("unsupported.")),
-			HEADER_TAG_START => Err(Error::TemporalError("unsupported.")),
-			HEADER_TAG_U8 => Err(Error::TemporalError("unsupported.")),
-			HEADER_TAG_U16 => Err(Error::TemporalError("unsupported.")),
-			HEADER_TAG_U32 => Err(Error::TemporalError("unsupported.")),
-			HEADER_TAG_U64 => Err(Error::TemporalError("unsupported.")),
-			HEADER_BREAK => Err(Error::TemporalError("unexpected break")),
-			_ => Err(Error::TemporalError("Not assigned")),
+			HEADER_BYTE_INFINITE => Err(Error::Unsupported(HEADER_BYTE_INFINITE)),
+			HEADER_TEXT_INFINITE => Err(Error::Unsupported(HEADER_TEXT_INFINITE)),
+			HEADER_ARRAY_INFINITE => Err(Error::Unsupported(HEADER_ARRAY_INFINITE)),
+			HEADER_MAP_INFINITE => Err(Error::Unsupported(HEADER_MAP_INFINITE)),
+			peek if HEADER_TAG_START <= peek && peek < HEADER_TAG_U8 => {
+				Err(Error::Unsupported(peek))
+			}
+			HEADER_TAG_U8 => Err(Error::Unsupported(HEADER_TAG_U8)),
+			HEADER_TAG_U16 => Err(Error::Unsupported(HEADER_TAG_U16)),
+			HEADER_TAG_U32 => Err(Error::Unsupported(HEADER_TAG_U32)),
+			HEADER_TAG_U64 => Err(Error::Unsupported(HEADER_TAG_U64)),
+			HEADER_BREAK => Err(Error::Unexpected(HEADER_BREAK, "any other header")),
+			peek => Err(Error::Unassigned(peek)),
 		}
 	}
 
@@ -271,7 +274,7 @@ where
 		} else if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_U8 {
 			visitor.visit_u8(peek & 0x1F)
 		} else {
-			Err(Error::TemporalError("Not an unsigned int"))
+			Err(Error::Unexpected(peek, "unsigned integer"))
 		}
 	}
 
@@ -329,7 +332,7 @@ where
 		} else if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_U8 {
 			visitor.visit_i8(-1 - i8::try_from(peek & 0x1F)?)
 		} else {
-			Err(Error::TemporalError("Not a signed int"))
+			Err(Error::Unexpected(peek, "signed integer"))
 		}
 	}
 
@@ -395,7 +398,7 @@ where
 		} else if peek == HEADER_FALSE {
 			visitor.visit_bool(false)
 		} else {
-			Err(Error::TemporalError("Not a boolean"))
+			Err(Error::Unexpected(peek, "boolean"))
 		}
 	}
 
@@ -423,7 +426,8 @@ where
 			HEADER_TEXT_U16 => (self.reader.read_u16()?) as usize,
 			HEADER_TEXT_U32 => usize::try_from(self.reader.read_u32()?)?,
 			HEADER_TEXT_U64 => usize::try_from(self.reader.read_u64()?)?,
-			_ => return Err(Error::TemporalError("Not a string")),
+			HEADER_TEXT_INFINITE => return Err(Error::Unsupported(HEADER_TEXT_INFINITE)),
+			n => return Err(Error::Unexpected(n, "string")),
 		};
 		match self.reader.read_bytes(size)? {
 			EitherLifetime::Current(bytes) => visitor.visit_str(std::str::from_utf8(bytes)?),
@@ -458,7 +462,8 @@ where
 			HEADER_BYTE_U16 => (self.reader.read_u16()?) as usize,
 			HEADER_BYTE_U32 => usize::try_from(self.reader.read_u32()?)?,
 			HEADER_BYTE_U64 => usize::try_from(self.reader.read_u64()?)?,
-			_ => return Err(Error::TemporalError("Not a byte")),
+			HEADER_BYTE_INFINITE => return Err(Error::Unsupported(HEADER_BYTE_INFINITE)),
+			n => return Err(Error::Unexpected(n, "byte")),
 		};
 		match self.reader.read_bytes(size)? {
 			EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
@@ -505,10 +510,11 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek_and_consume()? == HEADER_UNDEFINED {
+		let peek = self.peek_and_consume()?;
+		if peek == HEADER_UNDEFINED {
 			visitor.visit_unit()
 		} else {
-			Err(Error::TemporalError("Not a unit"))
+			Err(Error::Unexpected(peek, "unit"))
 		}
 	}
 
@@ -517,10 +523,11 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek_and_consume()? == HEADER_UNDEFINED {
+		let peek = self.peek_and_consume()?;
+		if peek == HEADER_UNDEFINED {
 			visitor.visit_unit()
 		} else {
-			Err(Error::TemporalError("Not a unit struct"))
+			Err(Error::Unexpected(peek, "unit (struct like)"))
 		}
 	}
 
@@ -543,7 +550,8 @@ where
 			HEADER_ARRAY_U16 => (self.reader.read_u16()?) as usize,
 			HEADER_ARRAY_U32 => usize::try_from(self.reader.read_u32()?)?,
 			HEADER_ARRAY_U64 => usize::try_from(self.reader.read_u64()?)?,
-			_ => return Err(Error::TemporalError("Not a sequence")),
+			HEADER_ARRAY_INFINITE => return Err(Error::Unsupported(HEADER_ARRAY_INFINITE)),
+			n => return Err(Error::Unexpected(n, "array")),
 		};
 		visitor.visit_seq(SeqAccess {
 			de: self,
@@ -582,7 +590,8 @@ where
 			HEADER_MAP_U16 => (self.reader.read_u16()?) as usize,
 			HEADER_MAP_U32 => usize::try_from(self.reader.read_u32()?)?,
 			HEADER_MAP_U64 => usize::try_from(self.reader.read_u64()?)?,
-			_ => return Err(Error::TemporalError("Not a Map")),
+			HEADER_MAP_INFINITE => return Err(Error::Unsupported(HEADER_MAP_INFINITE)),
+			n => return Err(Error::Unexpected(n, "map")),
 		};
 		visitor.visit_map(MapAccess {
 			de: self,
@@ -621,7 +630,7 @@ where
 				self.consume();
 				visitor.visit_enum(VariantAccess { de: self })
 			}
-			_ => Err(Error::TemporalError("Not an enum")),
+			n => Err(Error::Unexpected(n, "enum (text or map(1))")),
 		}
 	}
 

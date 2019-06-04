@@ -68,7 +68,7 @@ impl<'r> SliceReader<'r> {
 	fn end(&self, size: usize) -> Result<usize> {
 		match self.index.checked_add(size) {
 			Some(end) if end <= self.slice.len() => Ok(end),
-			_ => Err(Error::TemporalError("Temp1")),
+			_ => Err(Error::Message("Try to read after the end of the slice.")),
 		}
 	}
 
@@ -161,7 +161,9 @@ impl<R: io::Read> IoReader<R> {
 	fn reserve(&mut self, size: usize) -> Result<()> {
 		if size > self.scratch.capacity() {
 			if self.limited {
-				return Err(Error::TemporalError("Capacity overflow"));
+				return Err(Error::Message(
+					"Buffer limit exeed reach when reading a io::read element",
+				));
 			} else {
 				self.scratch.reserve(size - self.scratch.capacity());
 			}

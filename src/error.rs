@@ -15,8 +15,19 @@ pub enum Error {
 	/// - std::num::TryFromIntError
 	Other(OtherKind, Box<dyn std::error::Error>),
 
-	/// An error that is yet to be defined here.
-	TemporalError(&'static str),
+	/// Represent a header that is unsupported to deserialize.
+	/// - Any Infinite things (BYTE, STRING, MAP, ARRAY)
+	/// - Any tag
+	Unsupported(u8),
+
+	/// An unassigned header
+	Unassigned(u8),
+
+	/// Unexpected header form deserializer
+	Unexpected(u8, &'static str),
+
+	/// An error that is not he not defined by an enum because too singular
+	Message(&'static str),
 }
 
 /// Define when a serde error occured
