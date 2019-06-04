@@ -61,11 +61,203 @@ where
 	type Error = Error;
 
 	#[inline]
-	fn deserialize_any<V>(self, _: V) -> Result<V::Value>
+	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
 	where
 		V: de::Visitor<'de>,
 	{
-		unimplemented!()
+		match self.peek_and_consume()? {
+			HEADER_FALSE => visitor.visit_bool(false),
+			HEADER_TRUE => visitor.visit_bool(true),
+			HEADER_NULL => visitor.visit_none(),
+			HEADER_UNDEFINED => visitor.visit_unit(),
+			HEADER_FLOAT_U16 => {
+				visitor.visit_f32(half::f16::from_bits(self.reader.read_u16()?).into())
+			}
+			HEADER_FLOAT_U32 => visitor.visit_f32(self.reader.read_f32()?),
+			HEADER_FLOAT_U64 => visitor.visit_f64(self.reader.read_f64()?),
+			peek if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_U8 => {
+				visitor.visit_u8(peek & 0x1F)
+			}
+			HEADER_POSITIVE_U8 => visitor.visit_u8(self.reader.read_u8()?),
+			HEADER_POSITIVE_U16 => visitor.visit_u16(self.reader.read_u16()?),
+			HEADER_POSITIVE_U32 => visitor.visit_u32(self.reader.read_u32()?),
+			HEADER_POSITIVE_U64 => visitor.visit_u64(self.reader.read_u64()?),
+			peek if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_U8 => {
+				visitor.visit_i8(-1 - i8::try_from(peek & 0x1F)?)
+			}
+			HEADER_NEGATIVE_U8 => visitor.visit_i8(-1 - i8::try_from(self.reader.read_u8()?)?),
+			HEADER_NEGATIVE_U16 => visitor.visit_i16(-1 - i16::try_from(self.reader.read_u16()?)?),
+			HEADER_NEGATIVE_U32 => visitor.visit_i32(-1 - i32::try_from(self.reader.read_u32()?)?),
+			HEADER_NEGATIVE_U64 => visitor.visit_i64(-1 - i64::try_from(self.reader.read_u64()?)?),
+			peek if HEADER_BYTE_START <= peek && peek < HEADER_BYTE_U8 => {
+				match self.reader.read_bytes((peek & 0x1F) as usize)? {
+					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
+					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
+				}
+			}
+			HEADER_BYTE_U8 => {
+				let len = (self.reader.read_u8()?) as usize;
+				match self.reader.read_bytes(len)? {
+					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
+					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
+				}
+			}
+			HEADER_BYTE_U16 => {
+				let len = (self.reader.read_u16()?) as usize;
+				match self.reader.read_bytes(len)? {
+					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
+					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
+				}
+			}
+			HEADER_BYTE_U32 => {
+				let len = usize::try_from(self.reader.read_u32()?)?;
+				match self.reader.read_bytes(len)? {
+					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
+					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
+				}
+			}
+			HEADER_BYTE_U64 => {
+				let len = usize::try_from(self.reader.read_u64()?)?;
+				match self.reader.read_bytes(len)? {
+					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
+					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
+				}
+			}
+			peek if HEADER_TEXT_START <= peek && peek < HEADER_TEXT_U8 => {
+				match self.reader.read_bytes((peek & 0x1F) as usize)? {
+					EitherLifetime::Current(bytes) => {
+						visitor.visit_str(std::str::from_utf8(bytes)?)
+					}
+					EitherLifetime::Other(bytes) => {
+						visitor.visit_borrowed_str(std::str::from_utf8(bytes)?)
+					}
+				}
+			}
+			HEADER_TEXT_U8 => {
+				let size = (self.reader.read_u8()?) as usize;
+				match self.reader.read_bytes(size)? {
+					EitherLifetime::Current(bytes) => {
+						visitor.visit_str(std::str::from_utf8(bytes)?)
+					}
+					EitherLifetime::Other(bytes) => {
+						visitor.visit_borrowed_str(std::str::from_utf8(bytes)?)
+					}
+				}
+			}
+			HEADER_TEXT_U16 => {
+				self.consume();
+				let size = (self.reader.read_u16()?) as usize;
+				match self.reader.read_bytes(size)? {
+					EitherLifetime::Current(bytes) => {
+						visitor.visit_str(std::str::from_utf8(bytes)?)
+					}
+					EitherLifetime::Other(bytes) => {
+						visitor.visit_borrowed_str(std::str::from_utf8(bytes)?)
+					}
+				}
+			}
+			HEADER_TEXT_U32 => {
+				let size = usize::try_from(self.reader.read_u32()?)?;
+				match self.reader.read_bytes(size)? {
+					EitherLifetime::Current(bytes) => {
+						visitor.visit_str(std::str::from_utf8(bytes)?)
+					}
+					EitherLifetime::Other(bytes) => {
+						visitor.visit_borrowed_str(std::str::from_utf8(bytes)?)
+					}
+				}
+			}
+			HEADER_TEXT_U64 => {
+				let size = usize::try_from(self.reader.read_u64()?)?;
+				match self.reader.read_bytes(size)? {
+					EitherLifetime::Current(bytes) => {
+						visitor.visit_str(std::str::from_utf8(bytes)?)
+					}
+					EitherLifetime::Other(bytes) => {
+						visitor.visit_borrowed_str(std::str::from_utf8(bytes)?)
+					}
+				}
+			}
+			peek if HEADER_ARRAY_START <= peek && peek < HEADER_ARRAY_U8 => {
+				visitor.visit_seq(SeqAccess {
+					de: self,
+					len: (peek & 0x1F) as usize,
+				})
+			}
+			HEADER_ARRAY_U8 => {
+				let size = (self.reader.read_u8()?) as usize;
+				visitor.visit_seq(SeqAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_ARRAY_U16 => {
+				let size = (self.reader.read_u16()?) as usize;
+				visitor.visit_seq(SeqAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_ARRAY_U32 => {
+				let size = usize::try_from(self.reader.read_u32()?)?;
+				visitor.visit_seq(SeqAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_ARRAY_U64 => {
+				let size = usize::try_from(self.reader.read_u64()?)?;
+				visitor.visit_seq(SeqAccess {
+					de: self,
+					len: size,
+				})
+			}
+			peek if HEADER_MAP_START <= peek && peek < HEADER_MAP_U8 => {
+				visitor.visit_map(MapAccess {
+					de: self,
+					len: (peek & 0x1F) as usize,
+				})
+			}
+			HEADER_MAP_U8 => {
+				let size = (self.reader.read_u8()?) as usize;
+				visitor.visit_map(MapAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_MAP_U16 => {
+				let size = (self.reader.read_u16()?) as usize;
+				visitor.visit_map(MapAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_MAP_U32 => {
+				let size = usize::try_from(self.reader.read_u32()?)?;
+				visitor.visit_map(MapAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_MAP_U64 => {
+				let size = usize::try_from(self.reader.read_u64()?)?;
+				visitor.visit_map(MapAccess {
+					de: self,
+					len: size,
+				})
+			}
+			HEADER_BYTE_INFINITE => Err(Error::TemporalError("unsupported.")),
+			HEADER_TEXT_INFINITE => Err(Error::TemporalError("unsupported.")),
+			HEADER_ARRAY_INFINITE => Err(Error::TemporalError("unsupported.")),
+			HEADER_MAP_INFINITE => Err(Error::TemporalError("unsupported.")),
+			HEADER_TAG_START => Err(Error::TemporalError("unsupported.")),
+			HEADER_TAG_U8 => Err(Error::TemporalError("unsupported.")),
+			HEADER_TAG_U16 => Err(Error::TemporalError("unsupported.")),
+			HEADER_TAG_U32 => Err(Error::TemporalError("unsupported.")),
+			HEADER_TAG_U64 => Err(Error::TemporalError("unsupported.")),
+			HEADER_BREAK => Err(Error::TemporalError("unexpected break")),
+			_ => Err(Error::TemporalError("Not assigned")),
+		}
 	}
 
 	#[inline]
