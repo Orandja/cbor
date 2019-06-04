@@ -52,7 +52,33 @@ pub enum OtherKind {
 
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "")
+		match self {
+			Error::Serde(when, string) => {
+				let when = match when {
+					SerdeWhen::Deserialization => "deserializing",
+					SerdeWhen::Serialization => "serializing",
+				};
+				write!(
+					f,
+					"An error occured when {}. Serde message: {}",
+					when, string
+				)
+			}
+			Error::Other(kind, error) => {
+				let kind = match kind {
+					OtherKind::Io => "std::io::Error",
+					OtherKind::Utf8 => "std::str::Utf8Error",
+					OtherKind::Numerical => "std::num::TryFromIntError",
+				};
+				write!(f, "An error of type {} occured.\n{}", kind, error)
+			}
+			Error::Unsupported(header) => write!(f, "Unsupported header {:#02x}", header),
+			Error::Unassigned(header) => write!(f, "Unassigned header {:#02x}", header),
+			Error::Unexpected(header, string) => {
+				write!(f, "Unexpected header: {:#02x} expected: {}", header, string)
+			}
+			Error::Message(string) => write!(f, "{}", string),
+		}
 	}
 }
 
