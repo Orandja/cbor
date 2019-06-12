@@ -27,24 +27,26 @@ fn main() {
 		age: 21,
 	};
 
-	//Serialize into a slice
+	// Serialize into a slice
 	let mut buffer = [0u8; 128];
 	let writed_bytes: usize = orandja_cbor::to_slice(&mut buffer[..], jon).unwrap();
 
-	//Serialize into a io::Write
+	// Serialize into a io::Write
 	let _: usize = orandja_cbor::to_writer(vec![], jon).unwrap();
 	
-	//Serialize into a vector
+	// Serialize into a vector
 	let vec: Vec<u8> = orandja_cbor::to_vec(jon).unwrap();
 	
-	//Decoding from a slice
+	// Decoding from a slice
 	let _: Person = orandja_cbor::from_slice(&buffer[..writed_bytes]).unwrap();
 	
-	//Decoding from a io::Read
+	// Decoding from a io::Read
 	let _: Person = orandja_cbor::from_reader(&*vec).unwrap();
 
-    //Decoding from a io::Read with a limitation size. 
-    //Example: If a string of 129 bytes is inside. It will produce an error and will not read it. The overall capacity can be way bigger but each elements must be lower than 128bytes.
+    // Decoding from a io::Read with a limitation size. 
+    // Example: If a string of 129 bytes is inside. 
+    // It will produce an error and will not read it.
+    // The overall capacity can be way bigger but each elements must be lower than 128bytes.
 	let _: Person = orandja_cbor::from_reader_limit(&*vec, 128).unwrap();
 }
 ```
