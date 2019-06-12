@@ -44,7 +44,7 @@ fn main() {
 	let _: Person = orandja_cbor::from_reader(&*vec).unwrap();
 
     //Decoding from a io::Read with a limitation size. 
-    //If a string of 129 bytes is inside. It will produce an error and will not read it.
+    //Example: If a string of 129 bytes is inside. It will produce an error and will not read it. The overall capacity can be way bigger but each elements must be lower than 128bytes.
 	let _: Person = orandja_cbor::from_reader_limit(&*vec, 128).unwrap();
 }
 ```
@@ -57,6 +57,8 @@ Due to early developpement, some parts of the protocol and options are not cover
 - No Infinite BYTE, TEXT, ARRAY, MAP; I think (I may be wrong), if an information is split into multiples chunks it's meant to not be decoded as a single bloc. Thus decoding an infinite array into a vector might not be the right choice. So my will is to also use `#[serde(with = "module")]` to describe a clear way to handle that.
 - No encode/decode enums as integer. All enums are encoded as string.
 - No pretty print for encoded data.
+
+I may miss somes
 
 # Technical differences from `serde_cbor` crate
 
