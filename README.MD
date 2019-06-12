@@ -7,7 +7,8 @@ A simple serializer/deserializer implementation of the "[Concise Binary Object R
 In your dependencies:
 
 ```toml
-serde = { version = "1.0", features = ["derive"] }  
+serde = { version = "1.0", features = ["derive"] }
+orandja_cbor = { git = "https://github.com/Orandja/cbor" }
 ```
 
 Example: 
