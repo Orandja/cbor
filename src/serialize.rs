@@ -25,11 +25,11 @@ impl<W: Writer> Serializer<W> {
 
 	#[inline]
 	fn write_header_u8(&mut self, major: u8, header_value: u8) -> Result<Ok> {
-		if header_value < SIZE_U8 {
+		if header_value < SIZE_8 {
 			self.buffer[0] = major << 5 | header_value;
 			self.writer.write(&self.buffer[..1])
 		} else {
-			self.buffer[0] = major << 5 | SIZE_U8;
+			self.buffer[0] = major << 5 | SIZE_8;
 			self.buffer[1] = header_value;
 			self.writer.write(&self.buffer[..2])
 		}
@@ -40,7 +40,7 @@ impl<W: Writer> Serializer<W> {
 		if header_value <= core::u8::MAX as u16 {
 			self.write_header_u8(major, header_value as u8)
 		} else {
-			self.buffer[0] = major << 5 | SIZE_U16;
+			self.buffer[0] = major << 5 | SIZE_16;
 			BigEndian::write_u16(&mut self.buffer[1..], header_value);
 			self.writer.write(&self.buffer[..3])
 		}
@@ -51,7 +51,7 @@ impl<W: Writer> Serializer<W> {
 		if header_value <= core::u16::MAX as u32 {
 			self.write_header_u16(major, header_value as u16)
 		} else {
-			self.buffer[0] = major << 5 | SIZE_U32;
+			self.buffer[0] = major << 5 | SIZE_32;
 			BigEndian::write_u32(&mut self.buffer[1..], header_value);
 			self.writer.write(&self.buffer[..5])
 		}
@@ -62,7 +62,7 @@ impl<W: Writer> Serializer<W> {
 		if header_value <= core::u32::MAX as u64 {
 			self.write_header_u32(major, header_value as u32)
 		} else {
-			self.buffer[0] = major << 5 | SIZE_U64;
+			self.buffer[0] = major << 5 | SIZE_64;
 			BigEndian::write_u64(&mut self.buffer[1..], header_value);
 			self.writer.write(&self.buffer)
 		}
@@ -145,14 +145,14 @@ impl<'a, W: Writer> ser::Serializer for &'a mut Serializer<W> {
 
 	#[inline]
 	fn serialize_f32(self, value: f32) -> Result<Self::Ok> {
-		self.buffer[0] = HEADER_FLOAT_U32;
+		self.buffer[0] = HEADER_FLOAT_32;
 		BigEndian::write_f32(&mut self.buffer[1..], value);
 		self.writer.write(&self.buffer[..5])
 	}
 
 	#[inline]
 	fn serialize_f64(self, value: f64) -> Result<Self::Ok> {
-		self.buffer[0] = HEADER_FLOAT_U64;
+		self.buffer[0] = HEADER_FLOAT_64;
 		BigEndian::write_f64(&mut self.buffer[1..], value);
 		self.writer.write(&self.buffer)
 	}

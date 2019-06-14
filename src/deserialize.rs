@@ -47,7 +47,7 @@ impl<'de, R: Reader<'de>> Deserializer<R> {
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek_and_consume()?;
-		if peek == HEADER_FLOAT_U16 {
+		if peek == HEADER_FLOAT_16 {
 			visitor.visit_f32(half::f16::from_bits(self.reader.read_u16()?).into())
 		} else {
 			Err(Error::Unexpected(peek, "floating point"))
@@ -71,60 +71,60 @@ where
 			HEADER_TRUE => visitor.visit_bool(true),
 			HEADER_NULL => visitor.visit_none(),
 			HEADER_UNDEFINED => visitor.visit_unit(),
-			HEADER_FLOAT_U16 => {
+			HEADER_FLOAT_16 => {
 				visitor.visit_f32(half::f16::from_bits(self.reader.read_u16()?).into())
 			}
-			HEADER_FLOAT_U32 => visitor.visit_f32(self.reader.read_f32()?),
-			HEADER_FLOAT_U64 => visitor.visit_f64(self.reader.read_f64()?),
-			peek if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_U8 => {
+			HEADER_FLOAT_32 => visitor.visit_f32(self.reader.read_f32()?),
+			HEADER_FLOAT_64 => visitor.visit_f64(self.reader.read_f64()?),
+			peek if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_8 => {
 				visitor.visit_u8(peek & 0x1F)
 			}
-			HEADER_POSITIVE_U8 => visitor.visit_u8(self.reader.read_u8()?),
-			HEADER_POSITIVE_U16 => visitor.visit_u16(self.reader.read_u16()?),
-			HEADER_POSITIVE_U32 => visitor.visit_u32(self.reader.read_u32()?),
-			HEADER_POSITIVE_U64 => visitor.visit_u64(self.reader.read_u64()?),
-			peek if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_U8 => {
+			HEADER_POSITIVE_8 => visitor.visit_u8(self.reader.read_u8()?),
+			HEADER_POSITIVE_16 => visitor.visit_u16(self.reader.read_u16()?),
+			HEADER_POSITIVE_32 => visitor.visit_u32(self.reader.read_u32()?),
+			HEADER_POSITIVE_64 => visitor.visit_u64(self.reader.read_u64()?),
+			peek if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_8 => {
 				visitor.visit_i8(-1 - i8::try_from(peek & 0x1F)?)
 			}
-			HEADER_NEGATIVE_U8 => visitor.visit_i8(-1 - i8::try_from(self.reader.read_u8()?)?),
-			HEADER_NEGATIVE_U16 => visitor.visit_i16(-1 - i16::try_from(self.reader.read_u16()?)?),
-			HEADER_NEGATIVE_U32 => visitor.visit_i32(-1 - i32::try_from(self.reader.read_u32()?)?),
-			HEADER_NEGATIVE_U64 => visitor.visit_i64(-1 - i64::try_from(self.reader.read_u64()?)?),
-			peek if HEADER_BYTE_START <= peek && peek < HEADER_BYTE_U8 => {
+			HEADER_NEGATIVE_8 => visitor.visit_i8(-1 - i8::try_from(self.reader.read_u8()?)?),
+			HEADER_NEGATIVE_16 => visitor.visit_i16(-1 - i16::try_from(self.reader.read_u16()?)?),
+			HEADER_NEGATIVE_32 => visitor.visit_i32(-1 - i32::try_from(self.reader.read_u32()?)?),
+			HEADER_NEGATIVE_64 => visitor.visit_i64(-1 - i64::try_from(self.reader.read_u64()?)?),
+			peek if HEADER_BYTE_START <= peek && peek < HEADER_BYTE_8 => {
 				match self.reader.read_bytes((peek & 0x1F) as usize)? {
 					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
 					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
 				}
 			}
-			HEADER_BYTE_U8 => {
+			HEADER_BYTE_8 => {
 				let len = (self.reader.read_u8()?) as usize;
 				match self.reader.read_bytes(len)? {
 					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
 					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
 				}
 			}
-			HEADER_BYTE_U16 => {
+			HEADER_BYTE_16 => {
 				let len = (self.reader.read_u16()?) as usize;
 				match self.reader.read_bytes(len)? {
 					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
 					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
 				}
 			}
-			HEADER_BYTE_U32 => {
+			HEADER_BYTE_32 => {
 				let len = usize::try_from(self.reader.read_u32()?)?;
 				match self.reader.read_bytes(len)? {
 					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
 					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
 				}
 			}
-			HEADER_BYTE_U64 => {
+			HEADER_BYTE_64 => {
 				let len = usize::try_from(self.reader.read_u64()?)?;
 				match self.reader.read_bytes(len)? {
 					EitherLifetime::Current(bytes) => visitor.visit_bytes(bytes),
 					EitherLifetime::Other(bytes) => visitor.visit_borrowed_bytes(bytes),
 				}
 			}
-			peek if HEADER_TEXT_START <= peek && peek < HEADER_TEXT_U8 => {
+			peek if HEADER_TEXT_START <= peek && peek < HEADER_TEXT_8 => {
 				match self.reader.read_bytes((peek & 0x1F) as usize)? {
 					EitherLifetime::Current(bytes) => {
 						visitor.visit_str(std::str::from_utf8(bytes)?)
@@ -134,7 +134,7 @@ where
 					}
 				}
 			}
-			HEADER_TEXT_U8 => {
+			HEADER_TEXT_8 => {
 				let size = (self.reader.read_u8()?) as usize;
 				match self.reader.read_bytes(size)? {
 					EitherLifetime::Current(bytes) => {
@@ -145,7 +145,7 @@ where
 					}
 				}
 			}
-			HEADER_TEXT_U16 => {
+			HEADER_TEXT_16 => {
 				self.consume();
 				let size = (self.reader.read_u16()?) as usize;
 				match self.reader.read_bytes(size)? {
@@ -157,7 +157,7 @@ where
 					}
 				}
 			}
-			HEADER_TEXT_U32 => {
+			HEADER_TEXT_32 => {
 				let size = usize::try_from(self.reader.read_u32()?)?;
 				match self.reader.read_bytes(size)? {
 					EitherLifetime::Current(bytes) => {
@@ -168,7 +168,7 @@ where
 					}
 				}
 			}
-			HEADER_TEXT_U64 => {
+			HEADER_TEXT_64 => {
 				let size = usize::try_from(self.reader.read_u64()?)?;
 				match self.reader.read_bytes(size)? {
 					EitherLifetime::Current(bytes) => {
@@ -179,68 +179,68 @@ where
 					}
 				}
 			}
-			peek if HEADER_ARRAY_START <= peek && peek < HEADER_ARRAY_U8 => {
+			peek if HEADER_ARRAY_START <= peek && peek < HEADER_ARRAY_8 => {
 				visitor.visit_seq(SeqAccess {
 					de: self,
 					len: (peek & 0x1F) as usize,
 				})
 			}
-			HEADER_ARRAY_U8 => {
+			HEADER_ARRAY_8 => {
 				let size = (self.reader.read_u8()?) as usize;
 				visitor.visit_seq(SeqAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_ARRAY_U16 => {
+			HEADER_ARRAY_16 => {
 				let size = (self.reader.read_u16()?) as usize;
 				visitor.visit_seq(SeqAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_ARRAY_U32 => {
+			HEADER_ARRAY_32 => {
 				let size = usize::try_from(self.reader.read_u32()?)?;
 				visitor.visit_seq(SeqAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_ARRAY_U64 => {
+			HEADER_ARRAY_64 => {
 				let size = usize::try_from(self.reader.read_u64()?)?;
 				visitor.visit_seq(SeqAccess {
 					de: self,
 					len: size,
 				})
 			}
-			peek if HEADER_MAP_START <= peek && peek < HEADER_MAP_U8 => {
+			peek if HEADER_MAP_START <= peek && peek < HEADER_MAP_8 => {
 				visitor.visit_map(MapAccess {
 					de: self,
 					len: (peek & 0x1F) as usize,
 				})
 			}
-			HEADER_MAP_U8 => {
+			HEADER_MAP_8 => {
 				let size = (self.reader.read_u8()?) as usize;
 				visitor.visit_map(MapAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_MAP_U16 => {
+			HEADER_MAP_16 => {
 				let size = (self.reader.read_u16()?) as usize;
 				visitor.visit_map(MapAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_MAP_U32 => {
+			HEADER_MAP_32 => {
 				let size = usize::try_from(self.reader.read_u32()?)?;
 				visitor.visit_map(MapAccess {
 					de: self,
 					len: size,
 				})
 			}
-			HEADER_MAP_U64 => {
+			HEADER_MAP_64 => {
 				let size = usize::try_from(self.reader.read_u64()?)?;
 				visitor.visit_map(MapAccess {
 					de: self,
@@ -251,13 +251,13 @@ where
 			HEADER_TEXT_INFINITE => Err(Error::Unsupported(HEADER_TEXT_INFINITE)),
 			HEADER_ARRAY_INFINITE => Err(Error::Unsupported(HEADER_ARRAY_INFINITE)),
 			HEADER_MAP_INFINITE => Err(Error::Unsupported(HEADER_MAP_INFINITE)),
-			peek if HEADER_TAG_START <= peek && peek < HEADER_TAG_U8 => {
+			peek if HEADER_TAG_START <= peek && peek < HEADER_TAG_8 => {
 				Err(Error::Unsupported(peek))
 			}
-			HEADER_TAG_U8 => Err(Error::Unsupported(HEADER_TAG_U8)),
-			HEADER_TAG_U16 => Err(Error::Unsupported(HEADER_TAG_U16)),
-			HEADER_TAG_U32 => Err(Error::Unsupported(HEADER_TAG_U32)),
-			HEADER_TAG_U64 => Err(Error::Unsupported(HEADER_TAG_U64)),
+			HEADER_TAG_8 => Err(Error::Unsupported(HEADER_TAG_8)),
+			HEADER_TAG_16 => Err(Error::Unsupported(HEADER_TAG_16)),
+			HEADER_TAG_32 => Err(Error::Unsupported(HEADER_TAG_32)),
+			HEADER_TAG_64 => Err(Error::Unsupported(HEADER_TAG_64)),
 			HEADER_BREAK => Err(Error::Unexpected(HEADER_BREAK, "any other header")),
 			peek => Err(Error::Unassigned(peek)),
 		}
@@ -269,9 +269,9 @@ where
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek_and_consume()?;
-		if peek == HEADER_POSITIVE_U8 {
+		if peek == HEADER_POSITIVE_8 {
 			visitor.visit_u8(self.reader.read_u8()?)
-		} else if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_U8 {
+		} else if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_8 {
 			visitor.visit_u8(peek & 0x1F)
 		} else {
 			Err(Error::Unexpected(peek, "unsigned integer"))
@@ -283,7 +283,7 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek()? == HEADER_POSITIVE_U16 {
+		if self.peek()? == HEADER_POSITIVE_16 {
 			self.consume();
 			visitor.visit_u16(self.reader.read_u16()?)
 		} else {
@@ -296,7 +296,7 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek()? == HEADER_POSITIVE_U32 {
+		if self.peek()? == HEADER_POSITIVE_32 {
 			self.consume();
 			visitor.visit_u32(self.reader.read_u32()?)
 		} else {
@@ -309,7 +309,7 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek()? == HEADER_POSITIVE_U64 {
+		if self.peek()? == HEADER_POSITIVE_64 {
 			self.consume();
 			visitor.visit_u64(self.reader.read_u64()?)
 		} else {
@@ -323,13 +323,13 @@ where
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek_and_consume()?;
-		if peek == HEADER_POSITIVE_U8 {
+		if peek == HEADER_POSITIVE_8 {
 			visitor.visit_u8(self.reader.read_u8()?)
-		} else if peek == HEADER_NEGATIVE_U8 {
+		} else if peek == HEADER_NEGATIVE_8 {
 			visitor.visit_i8(-1 - i8::try_from(self.reader.read_u8()?)?)
-		} else if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_U8 {
+		} else if HEADER_POSITIVE_START <= peek && peek < HEADER_POSITIVE_8 {
 			visitor.visit_u8(peek & 0x1F)
-		} else if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_U8 {
+		} else if HEADER_NEGATIVE_START <= peek && peek < HEADER_NEGATIVE_8 {
 			visitor.visit_i8(-1 - i8::try_from(peek & 0x1F)?)
 		} else {
 			Err(Error::Unexpected(peek, "signed integer"))
@@ -342,10 +342,10 @@ where
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek()?;
-		if peek == HEADER_POSITIVE_U16 {
+		if peek == HEADER_POSITIVE_16 {
 			self.consume();
 			visitor.visit_u16(self.reader.read_u16()?)
-		} else if peek == HEADER_NEGATIVE_U16 {
+		} else if peek == HEADER_NEGATIVE_16 {
 			self.consume();
 			visitor.visit_i16(-1 - (i16::try_from(self.reader.read_u16()?)?))
 		} else {
@@ -359,10 +359,10 @@ where
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek()?;
-		if peek == HEADER_POSITIVE_U32 {
+		if peek == HEADER_POSITIVE_32 {
 			self.consume();
 			visitor.visit_u32(self.reader.read_u32()?)
-		} else if peek == HEADER_NEGATIVE_U32 {
+		} else if peek == HEADER_NEGATIVE_32 {
 			self.consume();
 			visitor.visit_i32(-1 - (i32::try_from(self.reader.read_u32()?)?))
 		} else {
@@ -376,10 +376,10 @@ where
 		V: de::Visitor<'de>,
 	{
 		let peek = self.peek()?;
-		if peek == HEADER_POSITIVE_U64 {
+		if peek == HEADER_POSITIVE_64 {
 			self.consume();
 			visitor.visit_u64(self.reader.read_u64()?)
-		} else if peek == HEADER_NEGATIVE_U64 {
+		} else if peek == HEADER_NEGATIVE_64 {
 			self.consume();
 			visitor.visit_i64(-1 - (i64::try_from(self.reader.read_u64()?)?))
 		} else {
@@ -421,11 +421,11 @@ where
 		V: de::Visitor<'de>,
 	{
 		let size: usize = match self.peek_and_consume()? {
-			n if HEADER_TEXT_START <= n && n < HEADER_TEXT_U8 => (n & 0x1F) as usize,
-			HEADER_TEXT_U8 => (self.reader.read_u8()?) as usize,
-			HEADER_TEXT_U16 => (self.reader.read_u16()?) as usize,
-			HEADER_TEXT_U32 => usize::try_from(self.reader.read_u32()?)?,
-			HEADER_TEXT_U64 => usize::try_from(self.reader.read_u64()?)?,
+			n if HEADER_TEXT_START <= n && n < HEADER_TEXT_8 => (n & 0x1F) as usize,
+			HEADER_TEXT_8 => (self.reader.read_u8()?) as usize,
+			HEADER_TEXT_16 => (self.reader.read_u16()?) as usize,
+			HEADER_TEXT_32 => usize::try_from(self.reader.read_u32()?)?,
+			HEADER_TEXT_64 => usize::try_from(self.reader.read_u64()?)?,
 			HEADER_TEXT_INFINITE => return Err(Error::Unsupported(HEADER_TEXT_INFINITE)),
 			n => return Err(Error::Unexpected(n, "string")),
 		};
@@ -457,11 +457,11 @@ where
 		V: de::Visitor<'de>,
 	{
 		let size: usize = match self.peek_and_consume()? {
-			n if HEADER_BYTE_START <= n && n < HEADER_BYTE_U8 => (n & 0x1F) as usize,
-			HEADER_BYTE_U8 => (self.reader.read_u8()?) as usize,
-			HEADER_BYTE_U16 => (self.reader.read_u16()?) as usize,
-			HEADER_BYTE_U32 => usize::try_from(self.reader.read_u32()?)?,
-			HEADER_BYTE_U64 => usize::try_from(self.reader.read_u64()?)?,
+			n if HEADER_BYTE_START <= n && n < HEADER_BYTE_8 => (n & 0x1F) as usize,
+			HEADER_BYTE_8 => (self.reader.read_u8()?) as usize,
+			HEADER_BYTE_16 => (self.reader.read_u16()?) as usize,
+			HEADER_BYTE_32 => usize::try_from(self.reader.read_u32()?)?,
+			HEADER_BYTE_64 => usize::try_from(self.reader.read_u64()?)?,
 			HEADER_BYTE_INFINITE => return Err(Error::Unsupported(HEADER_BYTE_INFINITE)),
 			n => return Err(Error::Unexpected(n, "byte")),
 		};
@@ -484,7 +484,7 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek()? == HEADER_FLOAT_U32 {
+		if self.peek()? == HEADER_FLOAT_32 {
 			self.consume();
 			visitor.visit_f32(self.reader.read_f32()?)
 		} else {
@@ -497,7 +497,7 @@ where
 	where
 		V: de::Visitor<'de>,
 	{
-		if self.peek()? == HEADER_FLOAT_U64 {
+		if self.peek()? == HEADER_FLOAT_64 {
 			self.consume();
 			visitor.visit_f64(self.reader.read_f64()?)
 		} else {
@@ -545,11 +545,11 @@ where
 		V: de::Visitor<'de>,
 	{
 		let size: usize = match self.peek_and_consume()? {
-			n if HEADER_ARRAY_START <= n && n < HEADER_ARRAY_U8 => (n & 0x1F) as usize,
-			HEADER_ARRAY_U8 => (self.reader.read_u8()?) as usize,
-			HEADER_ARRAY_U16 => (self.reader.read_u16()?) as usize,
-			HEADER_ARRAY_U32 => usize::try_from(self.reader.read_u32()?)?,
-			HEADER_ARRAY_U64 => usize::try_from(self.reader.read_u64()?)?,
+			n if HEADER_ARRAY_START <= n && n < HEADER_ARRAY_8 => (n & 0x1F) as usize,
+			HEADER_ARRAY_8 => (self.reader.read_u8()?) as usize,
+			HEADER_ARRAY_16 => (self.reader.read_u16()?) as usize,
+			HEADER_ARRAY_32 => usize::try_from(self.reader.read_u32()?)?,
+			HEADER_ARRAY_64 => usize::try_from(self.reader.read_u64()?)?,
 			HEADER_ARRAY_INFINITE => return Err(Error::Unsupported(HEADER_ARRAY_INFINITE)),
 			n => return Err(Error::Unexpected(n, "array")),
 		};
@@ -585,11 +585,11 @@ where
 		V: de::Visitor<'de>,
 	{
 		let size: usize = match self.peek_and_consume()? {
-			n if HEADER_MAP_START <= n && n < HEADER_MAP_U8 => (n & 0x1F) as usize,
-			HEADER_MAP_U8 => (self.reader.read_u8()?) as usize,
-			HEADER_MAP_U16 => (self.reader.read_u16()?) as usize,
-			HEADER_MAP_U32 => usize::try_from(self.reader.read_u32()?)?,
-			HEADER_MAP_U64 => usize::try_from(self.reader.read_u64()?)?,
+			n if HEADER_MAP_START <= n && n < HEADER_MAP_8 => (n & 0x1F) as usize,
+			HEADER_MAP_8 => (self.reader.read_u8()?) as usize,
+			HEADER_MAP_16 => (self.reader.read_u16()?) as usize,
+			HEADER_MAP_32 => usize::try_from(self.reader.read_u32()?)?,
+			HEADER_MAP_64 => usize::try_from(self.reader.read_u64()?)?,
 			HEADER_MAP_INFINITE => return Err(Error::Unsupported(HEADER_MAP_INFINITE)),
 			n => return Err(Error::Unexpected(n, "map")),
 		};
@@ -623,7 +623,7 @@ where
 		V: de::Visitor<'de>,
 	{
 		match self.peek()? {
-			n if HEADER_TEXT_START <= n && n <= HEADER_TEXT_U64 => {
+			n if HEADER_TEXT_START <= n && n <= HEADER_TEXT_64 => {
 				visitor.visit_enum(VariantAccess { de: self })
 			}
 			n if n == (HEADER_MAP_START | 1) => {
